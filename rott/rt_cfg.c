@@ -73,7 +73,7 @@ int MUvolume = 196;
 int FXvolume = 196;
 
 boolean mouseenabled = 1;
-boolean usemouselook = 0;
+boolean usemouselook = 1; /* MiSTer: the right stick */
 int inverse_mouse = 1; // set  to -1 to invert mouse
 boolean sdl_fullscreen = 1;
 

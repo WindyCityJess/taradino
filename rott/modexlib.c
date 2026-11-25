@@ -110,7 +110,7 @@ void GraphicsMode(void)
 	SDL_SetWindowTitle(screen, PACKAGE_STRING);
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-	renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_PRESENTVSYNC);
+	renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_SOFTWARE); /* MiSTer: the hybrid SDL has only this one */
 	if (!renderer)
 	{
 		renderer = SDL_CreateRenderer(screen, -1, SDL_RENDERER_SOFTWARE);

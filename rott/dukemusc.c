@@ -11,7 +11,9 @@
 #include "rt_util.h"
 #include "music.h"
 
-static music_module_t *music_modules[] = { NULL, &sdl_music_module,
+extern music_module_t mister_music_module;   /* MiSTer: mister_music_tara.c, the core's MIDI synthesizer */
+extern void mister_music_setvolume(int volume);
+static music_module_t *music_modules[] = { NULL, &mister_music_module,   /* MiSTer: in place of sdl_music_module (no MIDI in this SDL_mixer) */
 #if defined(HAVE_ADLMIDI)
 										   &adl_music_module
 #endif
@@ -54,6 +56,7 @@ void MUSIC_SetVolume(int volume)
 {
 	float_music_volume = 8.0 * pow(volume / 255.0, 1.4);
 	Mix_VolumeMusic(volume >> 1); // convert 0-255 to 0-128.
+	mister_music_setvolume(volume);   /* MiSTer */
 }
 
 int MUSIC_SongPlaying(void)

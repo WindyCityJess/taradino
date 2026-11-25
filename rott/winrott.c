@@ -6,8 +6,8 @@
 
 // typedef unsigned char byte;
 
-int iGLOBAL_SCREENWIDTH = 640;	// bna
-int iGLOBAL_SCREENHEIGHT = 400; // bna
+int iGLOBAL_SCREENWIDTH = 320;	// bna; MiSTer: the game's own mode
+int iGLOBAL_SCREENHEIGHT = 200; // bna; MiSTer
 
 int iGLOBAL_HEALTH_X;
 int iGLOBAL_HEALTH_Y;

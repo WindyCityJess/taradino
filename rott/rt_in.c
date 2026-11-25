@@ -479,8 +479,157 @@ static inline void mwheelkey(int type)
 	mwheelsym = 0;
 }
 
+
+/* MiSTer (patch_rottmister.py): the hybrid core's gamepad as keys. */
+static SDL_Joystick *mh_joy = NULL;
+static SDL_JoystickID mh_joy_id = -1;   /* its instance id: the events carry this, not the index */
+static int mh_btn_key[32];          /* the scancode a held button pressed, released with it */
+static int mh_hat_down[4];          /* up, down, left, right of the d-pad: the arrow keys (walk, turn; the menus) */
+static int mh_stick_down[4];        /* the left stick: Up/Down arrows and comma/period (walk, strafe) */
+static int mh_log;                  /* MISTER_PAD_LOG=1: every pad key to the log */
+static int mh_trig_down[2];         /* L2, R2 */
+static const int mh_hat_key[4]   = { 0x48, 0x50, 0x4b, 0x4d };   /* Up, Down, Left, Right */
+static const int mh_stick_key[4] = { 0x48, 0x50, 0x33, 0x34 };   /* Up, Down, comma, period */
+#define MH_STICK_ON  12000
+#define MH_STICK_OFF 8000
+#define MH_TRIG_ON   16000
+
+static void mh_push(int k)
+{
+    KeyboardQueue[ Keytail ] = k;
+    Keytail = ( Keytail + 1 )&( KEYQMAX - 1 );
+    Keystate[k & 0x7f] = !(k & 0x80);
+    if (!(k & 0x80)) LastScan = k;      /* the title, "press any key" and the menus wait on LastScan */
+    if (mh_log) fprintf(stderr, "mister: pad key %02x%s\n", k & 0x7f, (k & 0x80) ? " up" : "");
+}
+
+static int mh_button_key(int b)
+{
+    switch (b)
+    {
+    case 0: return 0x1d;            /* Fire: Ctrl */
+    case 1: return 0x39;            /* Open: Space */
+    case 2: return 0x1c;            /* Jump: Enter = swap weapon */
+    case 3: return 0x0e;            /* Crouch: Backspace = turn around */
+    case 4: {                       /* Next Weapon: the number key of the next one */
+        int w = locplayerstate ? locplayerstate->weapon : 0;
+        if (w < 0 || w > 2) return 0x02;      /* a missile weapon or none: pistol */
+        return 0x03 + w;                      /* pistol -> dual, dual -> MP40, MP40 -> missile */
+    }
+    case 5: return 0x36;            /* Use Item: Right Shift = run */
+    case 6: return 0x0f;            /* Map: Tab */
+    case 7: return 0x01;            /* Menu: Esc */
+    case 28: return 0x1c;           /* Menu OK: Enter */
+    case 29: return 0x01;           /* Menu Back: Esc */
+    }
+    return 0;
+}
+
+static void mh_pad_init(void)
+{
+    if (mh_joy) return;
+    if (!SDL_WasInit(SDL_INIT_JOYSTICK)) { SDL_InitSubSystem(SDL_INIT_JOYSTICK); mh_log = getenv("MISTER_PAD_LOG") != NULL; }
+    if (SDL_NumJoysticks() > 0) mh_joy = SDL_JoystickOpen(0);   /* the hybrid SDL's virtual pad: there once the video is up */
+    if (!mh_joy) return;
+    mh_joy_id = SDL_JoystickInstanceID(mh_joy);
+    SDL_JoystickEventState(SDL_ENABLE);
+    fprintf(stderr, "mister: pad open: %d buttons, %d axes, %d hats, instance %d\n", SDL_JoystickNumButtons(mh_joy), SDL_JoystickNumAxes(mh_joy), SDL_JoystickNumHats(mh_joy), (int)mh_joy_id);
+}
+
+static void mh_dir(int *state, const int *key, int i, int down)
+{
+    if (down == state[i]) return;
+    state[i] = down;
+    mh_push(down ? key[i] : (key[i] | 0x80));
+}
+
+static void mh_pad_release(void)
+{
+    int i;
+    for (i = 0; i < 32; i++) if (mh_btn_key[i]) { mh_push(mh_btn_key[i] | 0x80); mh_btn_key[i] = 0; }
+    for (i = 0; i < 4; i++) { mh_dir(mh_hat_down, mh_hat_key, i, 0); mh_dir(mh_stick_down, mh_stick_key, i, 0); }
+    for (i = 0; i < 2; i++) if (mh_trig_down[i]) { mh_push((i ? 0x1d : 0x36) | 0x80); mh_trig_down[i] = 0; }
+}
+
+static int mh_pad_event(const SDL_Event *e)
+{
+    if (mh_log && e->type >= SDL_JOYAXISMOTION && e->type <= SDL_JOYDEVICEREMOVED)
+        fprintf(stderr, "mister: pad event %x which %d (pad %d)\n", e->type, (int)e->jbutton.which, (int)mh_joy_id);
+    switch (e->type)
+    {
+    case SDL_JOYDEVICEADDED:
+        mh_pad_init();
+        return 1;
+    case SDL_JOYDEVICEREMOVED:
+        if (mh_joy && e->jdevice.which == mh_joy_id)
+        {
+            mh_pad_release();
+            SDL_JoystickClose(mh_joy); mh_joy = NULL; mh_joy_id = -1;
+            fprintf(stderr, "mister: pad detached (a video restart), reopened when it is back\n");
+        }
+        return 1;
+    case SDL_JOYBUTTONDOWN:
+    case SDL_JOYBUTTONUP: {
+        int b = e->jbutton.button;
+        if (!mh_joy || e->jbutton.which != mh_joy_id || b < 0 || b >= 32) return 0;
+        if (e->type == SDL_JOYBUTTONDOWN)
+        {
+            int k = mh_button_key(b);
+            if (!k || mh_btn_key[b]) return 0;
+            mh_btn_key[b] = k; mh_push(k);
+        }
+        else if (mh_btn_key[b])
+        {
+            mh_push(mh_btn_key[b] | 0x80); mh_btn_key[b] = 0;
+        }
+        return 1;
+    }
+    case SDL_JOYHATMOTION: {
+        int v = e->jhat.value;
+        if (!mh_joy || e->jhat.which != mh_joy_id || e->jhat.hat != 0) return 0;
+        mh_dir(mh_hat_down, mh_hat_key, 0, (v & SDL_HAT_UP) != 0); mh_dir(mh_hat_down, mh_hat_key, 1, (v & SDL_HAT_DOWN) != 0);
+        mh_dir(mh_hat_down, mh_hat_key, 2, (v & SDL_HAT_LEFT) != 0); mh_dir(mh_hat_down, mh_hat_key, 3, (v & SDL_HAT_RIGHT) != 0);
+        return 1;
+    }
+    case SDL_JOYAXISMOTION: {
+        int a = e->jaxis.axis, v = e->jaxis.value;
+        if (!mh_joy || e->jaxis.which != mh_joy_id) return 0;
+        if (a == 0 || a == 1)
+        {
+            int neg, pos;                        /* axis 0: left(2)/right(3); axis 1: up(0)/down(1) */
+            if (a == 0) { neg = 2; pos = 3; } else { neg = 0; pos = 1; }
+            if (v <= -MH_STICK_ON) mh_dir(mh_stick_down, mh_stick_key, neg, 1); else if (v > -MH_STICK_OFF) mh_dir(mh_stick_down, mh_stick_key, neg, 0);
+            if (v >= MH_STICK_ON) mh_dir(mh_stick_down, mh_stick_key, pos, 1); else if (v < MH_STICK_OFF) mh_dir(mh_stick_down, mh_stick_key, pos, 0);
+            return 1;
+        }
+        if (a == 4 || a == 5)
+        {
+            int t = a - 4, down = v >= MH_TRIG_ON, k = t ? 0x1d : 0x36;   /* R2 fire, L2 run */
+            if (down != mh_trig_down[t]) { mh_trig_down[t] = down; mh_push(down ? k : (k | 0x80)); }
+            return 1;
+        }
+        return 0;
+    }
+    }
+    return 0;
+}
+
+/* the right stick as mouse motion, once per poll of the mouse */
+static int mh_look_dx, mh_look_dy;
+static void mh_pad_look(void)
+{
+    int x, y;
+    if (!mh_joy) return;
+    x = SDL_JoystickGetAxis(mh_joy, 2); y = SDL_JoystickGetAxis(mh_joy, 3);
+    if (x > -MH_STICK_OFF && x < MH_STICK_OFF) x = 0;
+    if (y > -MH_STICK_OFF && y < MH_STICK_OFF) y = 0;
+    mh_look_dx += x / 1200;
+    mh_look_dy += y / 2400;
+}
+
 static int root_sdl_event_filter(SDL_Event *event)
 {
+	if (mh_pad_event(event)) return 0;
 	switch (event->type)
 	{
 		// map mouse wheel to fake F13/F14 key presses
@@ -522,6 +671,7 @@ static int root_sdl_event_filter(SDL_Event *event)
 static void sdl_handle_events(void)
 {
 	SDL_Event event;
+	mh_pad_init();   /* MiSTer: the pad shows up with the video, after IN_Startup */
 	while (SDL_PollEvent(&event))
 		root_sdl_event_filter(&event);
 
@@ -555,6 +705,9 @@ void INL_GetMouseDelta(int *x, int *y)
 	IN_PumpEvents();
 
 	SDL_GetRelativeMouseState(x, y);
+	mh_pad_look();   /* MiSTer: the right stick */
+	*x += mh_look_dx; *y += mh_look_dy;
+	mh_look_dx = mh_look_dy = 0;
 }
 
 //******************************************************************************
@@ -887,6 +1040,7 @@ void IN_Startup(void)
 		}
 	}
 
+	mh_pad_init();
 	IN_Started = true;
 }
 

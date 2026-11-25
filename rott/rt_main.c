@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
 	DrawRottTitle();
 	gamestate.randomseed = -1;
 
-	gamestate.autorun = 0;
+	gamestate.autorun = 1; /* MiSTer: a pad game runs */
 	StartupSoftError();
 	//   UL_ErrorStartup ();
 
@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
 				MenuFadeOut();
 			}
 			//         ParticleIntro ();
-			ApogeeTitle();
+			/* MiSTer: the Apogee logo is skipped (Jess, 2026-11-24): straight to the title */
 		}
 #endif
 	}

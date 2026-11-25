@@ -59,6 +59,12 @@ check_library_exists(m pow "" HAVE_LIBM)
 if(HAVE_LIBM)
 	target_link_libraries(taradino PRIVATE m)
 endif()
+# MiSTer (patch_taradino_mister.py): jfaudiolib's music objects (MUSIC_* renamed JFA_*) and the libraries the
+# hybrid SDL needs; a static link, as the other ports
+if(MISTER_EXTRA_OBJS)
+	target_sources(taradino PRIVATE ${MISTER_EXTRA_OBJS})
+	target_link_libraries(taradino PRIVATE rt dl pthread)
+endif()
 
 if(libADLMIDI_FOUND)
 	target_compile_definitions(taradino PRIVATE HAVE_ADLMIDI)

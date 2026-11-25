@@ -1380,8 +1380,42 @@ void CheckCode(int which)
 ================
 */
 
+
+/* MiSTer (patch_taradino_mister.py): the jfSW core's OSD Cheats page. God Mode (bit 33) is followed when it
+   changes (the game's own CHOJIN still toggles it between); the triggers do their thing once each time. No
+   Clipping (bit 34): the game has no such cheat. */
+#include <mister_hybrid.h>
+static void MiSTerCheats(void)
+{
+	static int lastgod = -1;
+	int god = (int)((MH_OSDStatus() >> 33) & 1);
+	int clip = (int)((MH_OSDStatus() >> 34) & 1);
+	int triggers = MH_OSDTriggers();
+
+	if (demoplayback || demorecord)
+		return;
+	if (god != lastgod)
+	{
+		if ((lastgod >= 0 || god) && ((godmode != 0) != (god != 0)))
+			DoGodMode();
+		lastgod = god;
+	}
+	/* "No Clipping" (the core's label; the game has no such cheat): the fly powerup, mercury mode (FLYBOY), kept up
+	   while the entry is on (Jess, 2026-11-25) */
+	if (clip && !(PLAYER[0]->flags & FL_FLEET))
+		DoMercuryModePowerup();
+	if (triggers & 1)
+	{
+		OutfitPlayer();
+		DoItemCheat();
+	}
+	if (triggers & 2)
+		EndLevel();
+}
+
 void CheckDebug(void)
 {
+	MiSTerCheats();
 	int which;
 	if (DebugOk == false)
 	{
